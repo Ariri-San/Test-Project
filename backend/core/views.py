@@ -3,10 +3,16 @@ import requests
 from rest_framework.viewsets import ModelViewSet, GenericViewSet, mixins
 from rest_framework.views import APIView, Response, status
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
+from rest_framework.decorators import action
+
+from django.conf import settings
+
+from djoser.views import UserViewSet as BaseUserViewSet
+
 from . import models, serializers, permissions
 
-
 # Create your views here.
+
 
 class SendCodeAPIView(APIView):
     def post(self, request):
