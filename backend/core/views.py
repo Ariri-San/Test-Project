@@ -51,6 +51,7 @@ class ResetPasswordAPIView(APIView):
             return Response({"detail": "اشکالی برای ارسال کد وجود دارد"}, status=status.HTTP_402_PAYMENT_REQUIRED)
 
 
+
 class ResetPasswordCheckAPIView(APIView):
     serializer_class = serializers.CheckCodeSerializer
     
