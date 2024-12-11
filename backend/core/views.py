@@ -1,11 +1,15 @@
-import requests
+from datetime import datetime, timedelta
+import pytz
 
-from rest_framework.viewsets import ModelViewSet, GenericViewSet, mixins
+from rest_framework.viewsets import ModelViewSet, GenericViewSet, mixins, ViewSet
+from rest_framework.exceptions import ValidationError
 from rest_framework.views import APIView, Response, status
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.decorators import action
 
+from django.db import transaction
 from django.conf import settings
+from django.core.mail import send_mail
 
 from djoser.views import UserViewSet as BaseUserViewSet
 
@@ -14,100 +18,82 @@ from . import models, serializers, permissions
 # Create your views here.
 
 
-class SendCodeAPIView(APIView):
+
+
+class ResetPasswordAPIView(APIView):
+    serializer_class = serializers.EmailSerializer
+    
     def post(self, request):
-        phone_serializer = serializers.PhoneSerializer(data=request.data)
-        phone_serializer.is_valid()
+        email_serializer = serializers.EmailSerializer(data=request.data)
+        email_serializer.is_valid()
         
-        phone = "+98" + str(phone_serializer.data["phone"])[0:]
+        email = str(email_serializer.data["email"])
+        user = email_serializer.get_user()
+        
         try:
-            models.User.objects.get(phone=phone)
+            old_token_user = models.TokenUser.objects.get(user_id=user.id)
+            old_token_user.delete()
         except:
-            return Response({"phone": ["شماره موبایل یافت نشد"]}, status=status.HTTP_400_BAD_REQUEST)
+            pass
         
-        data = {
-            "UserName": "na30makbarpour",
-            "Password": "Amir110110!@#",
-            "Mobile": str(phone_serializer.data["phone"]),
-            "Footer": "Academy Na30m"
-        }
+        token_user = models.TokenUser.objects.create(user_id=user.id)
         
         try:
-            response = requests.post(url="http://smspanel.Trez.ir/AutoSendCode.ashx", data=data)
-        except Exception as error:
-            print("ERROR:  " + response.text)
-            print(error)
-            raise Response({"detail": "ارور از سمت سامانه پیامکی"}, status=status.HTTP_408_REQUEST_TIMEOUT)
+            send_mail(
+                "Subject here",
+                f"The Code Is {token_user.code}",
+                "shayanghodos@gmail.com",
+                [email],
+                fail_silently=False,
+            )
+            return Response("کد به ایمیل ارسال شد", status=status.HTTP_200_OK)
+        except:
+            return Response({"detail": "اشکالی برای ارسال کد وجود دارد"}, status=status.HTTP_402_PAYMENT_REQUIRED)
 
-        if int(response.text) >= 2000:
-            return Response("کد ارسال شد", status=status.HTTP_200_OK)
-        else:
-            return Response({"detail": "اشکالی برای ارسال کد از سمت سامانه وجود دارد"}, status=status.HTTP_402_PAYMENT_REQUIRED)
 
-
-class CheckCodeAPIView(APIView):
+class ResetPasswordCheckAPIView(APIView):
+    serializer_class = serializers.CheckCodeSerializer
+    
     def post(self, request):
         code_serializer = serializers.CheckCodeSerializer(data=request.data)
         code_serializer.is_valid()
         
-        phone = "+98" + str(code_serializer.data["phone"])[0:]
-        try:
-            user = models.User.objects.get(phone=phone)
-        except:
-            return Response({"phone": ["شماره موبایل یافت نشد"]}, status=status.HTTP_400_BAD_REQUEST)
-        
-        data = {
-            "UserName": "na30makbarpour",
-            "Password": "Amir110110!@#",
-            "Mobile": str(code_serializer.data["phone"]),
-            "Code": str(code_serializer.data["code"])
-        }
+        code = str(code_serializer.data["code"])
+        user = code_serializer.get_user()
         
         try:
-            response = requests.post(url="http://smspanel.Trez.ir/CheckSendCode.ashx", data=data)
-        except Exception as error:
-            print("ERROR:  " + response.text)
-            print(error)
-            raise Response({"detail": "ارور از سمت سامانه پیامکی"}, status=status.HTTP_408_REQUEST_TIMEOUT)
-        
-        if response.text == "true":
-            user.set_password(code_serializer.data["password"])
-            user.save()
+            token_user = models.TokenUser.objects.get(user_id=user.id, code=code)
+            now = datetime.now(pytz.timezone(settings.TIME_ZONE))
+            if now > token_user.expired_datetime:
+                raise
             return Response("کد درست است", status=status.HTTP_200_OK)
-        else:
+        except:
             return Response({"code": ["کد اشتباه است"]}, status=status.HTTP_400_BAD_REQUEST)
 
 
 
-class ConfirmCodeAPIView(APIView):
+class ResetPasswordConfirmAPIView(APIView):
+    serializer_class = serializers.ConfirmCodeSerializer
+    
     def post(self, request):
         code_serializer = serializers.ConfirmCodeSerializer(data=request.data)
         code_serializer.is_valid()
         
-        phone = "+98" + str(code_serializer.data["phone"])[0:]
-        try:
-            user = models.User.objects.get(phone=phone)
-        except:
-            return Response({"phone": ["شماره موبایل یافت نشد"]}, status=status.HTTP_400_BAD_REQUEST)
-        
-        data = {
-            "UserName": "na30makbarpour",
-            "Password": "Amir110110!@#",
-            "Mobile": str(code_serializer.data["phone"]),
-            "Code": str(code_serializer.data["code"])
-        }
+        code = str(code_serializer.data["code"])
+        user = code_serializer.get_user()
         
         try:
-            response = requests.post(url="http://smspanel.Trez.ir/CheckSendCode.ashx", data=data)
-        except Exception as error:
-            print("ERROR:  " + response.text)
-            print(error)
-            raise Response({"detail": "ارور از سمت سامانه پیامکی"}, status=status.HTTP_408_REQUEST_TIMEOUT)
-        
-        if response.text == "true":
-            user.is_active = True
+            token_user = models.TokenUser.objects.get(user_id=user.id, code=code)
+            now = datetime.now(pytz.timezone(settings.TIME_ZONE))
+            if now > token_user.expired_datetime:
+                raise
+            
+            user.set_password(str(code_serializer.data["password"]))
             user.save()
-            return Response("کد درست است", status=status.HTTP_200_OK)
-        else:
-            return Response({"code": ["کد اشتباه است"]}, status=status.HTTP_400_BAD_REQUEST)
+            return Response("پسورد عوض شد", status=status.HTTP_200_OK)
+        
+        except ValidationError as e:
+            return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
+        except models.Token.DoesNotExist:
+            return Response({"error": "Invalid code"}, status=status.HTTP_400_BAD_REQUEST)
 
