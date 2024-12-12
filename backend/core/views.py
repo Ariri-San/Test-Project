@@ -66,7 +66,7 @@ class ResetPasswordCheckAPIView(APIView):
             token_user = models.TokenUser.objects.get(user_id=user.id, code=code)
             now = datetime.now(pytz.timezone(settings.TIME_ZONE))
             if now > token_user.expired_datetime:
-                raise
+                return Response({"detail": ["کد باطل شده است لطفا دوباره کد را ارسال کنید"]}, status=status.HTTP_400_BAD_REQUEST)
             return Response("کد درست است", status=status.HTTP_200_OK)
         except:
             return Response({"code": ["کد اشتباه است"]}, status=status.HTTP_400_BAD_REQUEST)
@@ -87,7 +87,7 @@ class ResetPasswordConfirmAPIView(APIView):
             token_user = models.TokenUser.objects.get(user_id=user.id, code=code)
             now = datetime.now(pytz.timezone(settings.TIME_ZONE))
             if now > token_user.expired_datetime:
-                raise
+                return Response({"detail": ["کد باطل شده است لطفا دوباره کد را ارسال کنید"]}, status=status.HTTP_400_BAD_REQUEST)
             
             user.set_password(str(code_serializer.data["password"]))
             user.save()
@@ -96,5 +96,5 @@ class ResetPasswordConfirmAPIView(APIView):
         except ValidationError as e:
             return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
         except models.Token.DoesNotExist:
-            return Response({"error": "Invalid code"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": ["کد اشتباه است"]}, status=status.HTTP_400_BAD_REQUEST)
 
