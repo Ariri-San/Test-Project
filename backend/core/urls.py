@@ -6,6 +6,7 @@ from . import views
 
 
 router = CustomRouter()
+router.register("users", views.UserViewSet)
 router.add_custom_root("reset_password", views.ResetPasswordAPIView.as_view(), "reset_password")
 router.add_custom_root("check_code", views.ResetPasswordCheckAPIView.as_view(), "check_code")
 router.add_custom_root("confirm_code", views.ResetPasswordConfirmAPIView.as_view(), "confirm_code")
