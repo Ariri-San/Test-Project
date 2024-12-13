@@ -1,5 +1,6 @@
 import requests
 from django.contrib.auth.password_validation import validate_password
+from django.contrib.auth.validators import UnicodeUsernameValidator
 from djoser.serializers import UserSerializer as BaseUserSerializer, UserCreateSerializer as BaseUserCreateSerializer
 
 from rest_framework import serializers
@@ -19,7 +20,7 @@ class UserSerializer(BaseUserSerializer):
 
 
 
-
+#  ----------  User Code  ----------
 class EmailSerializer(serializers.Serializer):
     email = serializers.EmailField()
     
@@ -36,36 +37,31 @@ class EmailSerializer(serializers.Serializer):
             raise serializers.ValidationError("کاربری با این ایمیل پیدا نشد")
 
 
-
 class CheckCodeSerializer(EmailSerializer):
     code = serializers.CharField(max_length=6, min_length=6)
     
-    def validate(self, validate_data):
-        code = validate_data["code"]
-        
+    def validate_code(self, value):
         numbers = [str(i) for i in range(0, 10)]
-        for num in code:
+        for num in value:
             if num not in numbers:
                 raise serializers.ValidationError("کد باید فقط عدد باشد")
-        
-        return validate_data
+        return value
 
 
-
-class ConfirmCodeSerializer(EmailSerializer):
-    code = serializers.CharField(max_length=6, min_length=6)
+class ConfirmResetPasswordSerializer(CheckCodeSerializer):
     password = serializers.CharField(style={"input_type": "password"})
     
-    def validate(self, validate_data):
-        user = self.get_user(validate_data)
-        
-        validate_password(validate_data["password"], user)
+    def validate_password(self, value):
+        user = self.get_user(self.validated_data)
+        validate_password(value, user)
+        return value
 
-        code = validate_data["code"]
-        
-        numbers = [str(i) for i in range(0, 10)]
-        for num in code:
-            if num not in numbers:
-                raise serializers.ValidationError("کد باید فقط عدد باشد")
-        return validate_data
+
+class ConfirmResetUsernameSerializer(CheckCodeSerializer):
+    username = serializers.CharField(validators=[UnicodeUsernameValidator])
+    
+    def validate_username(self, value):
+        if models.User.objects.filter(username=value).exists():
+            raise serializers.ValidationError("نام کاربری تکراری است")
+        return value
 
