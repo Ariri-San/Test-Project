@@ -106,17 +106,13 @@ class UserViewSet(ModelViewSet):
             return settings_djoser.SERIALIZERS.user_delete
         elif self.action == "me":
             return settings_djoser.SERIALIZERS.current_user
-        elif self.action == "reset_password":
+        elif self.action == "send_code":
             return serializers.EmailSerializer
-        elif self.action == "reset_password_check":
+        elif self.action == "check_code":
             return serializers.CheckCodeSerializer
-        elif self.action == "reset_password_confirm":
+        elif self.action == "reset_password":
             return serializers.ConfirmResetPasswordSerializer
         elif self.action == "reset_username":
-            return serializers.EmailSerializer
-        elif self.action == "reset_username_check":
-            return serializers.CheckCodeSerializer
-        elif self.action == "reset_username_confirm":
             return serializers.ConfirmResetUsernameSerializer
 
         return self.serializer_class
@@ -134,7 +130,7 @@ class UserViewSet(ModelViewSet):
             return self.destroy(request, *args, **kwargs)
     
     @action(["post"], detail=False)
-    def reset_password(self, request, *args, **kwargs):
+    def send_code(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
@@ -162,7 +158,7 @@ class UserViewSet(ModelViewSet):
             return Response({"detail": "اشکالی برای ارسال کد وجود دارد"}, status=status.HTTP_402_PAYMENT_REQUIRED)
     
     @action(["post"], detail=False)
-    def reset_password_check(self, request, *args, **kwargs):
+    def check_code(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
@@ -179,7 +175,7 @@ class UserViewSet(ModelViewSet):
             return Response({"code": ["کد اشتباه است"]}, status=status.HTTP_400_BAD_REQUEST)
     
     @action(["post"], detail=False)
-    def reset_password_confirm(self, request, *args, **kwargs):
+    def reset_password(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
@@ -201,54 +197,8 @@ class UserViewSet(ModelViewSet):
         except models.TokenUser.DoesNotExist:
             return Response({"detail": ["کد اشتباه است"]}, status=status.HTTP_400_BAD_REQUEST)
     
-    
     @action(["post"], detail=False, url_path=f"reset_{models.User.USERNAME_FIELD}")
     def reset_username(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        
-        email = str(serializer.data["email"])
-        user = serializer.get_user()
-        
-        try:
-            old_token_user = models.TokenUser.objects.get(user_id=user.id)
-            old_token_user.delete()
-        except:
-            pass
-        
-        token_user = models.TokenUser.objects.create(user_id=user.id)
-        
-        try:
-            send_mail(
-                "Subject here",
-                f"The Code Is {token_user.code}",
-                "shayanghodos@gmail.com",
-                [email],
-                fail_silently=False,
-            )
-            return Response("کد به ایمیل ارسال شد", status=status.HTTP_200_OK)
-        except:
-            return Response({"detail": "اشکالی برای ارسال کد وجود دارد"}, status=status.HTTP_402_PAYMENT_REQUIRED)
-    
-    @action(["post"], detail=False, url_path=f"reset_{models.User.USERNAME_FIELD}_check")
-    def reset_username_check(self, request, *args, **kwargs):
-        code_serializer = self.get_serializer(data=request.data)
-        code_serializer.is_valid(raise_exception=True)
-        
-        code = str(code_serializer.data["code"])
-        user = code_serializer.get_user()
-        
-        try:
-            token_user = models.TokenUser.objects.get(user_id=user.id, code=code)
-            now = datetime.now(pytz.timezone(settings.TIME_ZONE))
-            if now > token_user.expired_datetime:
-                return Response({"detail": ["کد باطل شده است لطفا دوباره کد را ارسال کنید"]}, status=status.HTTP_400_BAD_REQUEST)
-            return Response("کد درست است", status=status.HTTP_200_OK)
-        except:
-            return Response({"code": ["کد اشتباه است"]}, status=status.HTTP_400_BAD_REQUEST)
-    
-    @action(["post"], detail=False, url_path=f"reset_{models.User.USERNAME_FIELD}_confirm")
-    def reset_username_confirm(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
